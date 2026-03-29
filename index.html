@@ -48,6 +48,8 @@ const CONFIG = {
   ufoMaxActive: 10,
   ufoSpawnChance: 0.01,
   ufoScrollStep: 16,
+  idleSpawnInterval: 2000,   // ms between idle spawn attempts
+  idleSpawnChance: 0.3,      // chance per idle attempt
   ufoSizeMin: 1.5,
   ufoSizeMax: 4,
   ufoAltitudeMin: 0.05,
@@ -391,7 +393,7 @@ const CONFIG = {
 
 <div class="hero">
   <h1>Buitenaarts 33</h1>
-  <div class="hero-date">Zaterdag 2 mei 2026</div>
+  <div class="hero-date">Transformeer & Transforminder</div>
   <p class="hero-sub">Ik word 33. Jij bent uitgenodigd.<br>Neem good vibes en zonnebrand mee.</p>
   <div class="scroll-hint">↓ de details ↓</div>
 </div>
@@ -768,6 +770,7 @@ let scrollAccum = 0;
 let lastScrollY = window.scrollY;
 let currentSmooth = 0;
 let scrollHintHidden = false;
+let lastIdleSpawn = 0;
 
 window.addEventListener('scroll', () => {
   const sy = window.scrollY;
@@ -836,10 +839,18 @@ function tick(now) {
     moonEl.style.opacity = '0';
   }
 
-  // 6) Creature spawning from scroll accumulator
+  // 6) Creature spawning — scroll-based + idle timer
   while (scrollAccum >= C.ufoScrollStep) {
     scrollAccum -= C.ufoScrollStep;
     if (getActiveCount() < C.ufoMaxActive && Math.random() < C.ufoSpawnChance) {
+      spawnCreature(now);
+    }
+  }
+
+  // Idle spawning (time-based, even without scrolling)
+  if (now - lastIdleSpawn >= C.idleSpawnInterval) {
+    lastIdleSpawn = now;
+    if (getActiveCount() < C.ufoMaxActive && Math.random() < C.idleSpawnChance) {
       spawnCreature(now);
     }
   }
