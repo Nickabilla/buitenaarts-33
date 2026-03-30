@@ -16,7 +16,7 @@ const CONFIG = {
   // --- Sun ---
   sunEmoji: '🌞',
   sunSize: '8rem',
-  sunStartY: 0.26,
+  sunStartY: 0.20,
   sunPeakScroll: 0.25,
   sunPeakY: -0.05,
   sunEndY: 1.15,
@@ -101,9 +101,9 @@ const CONFIG = {
     min-height: 100vh;
   }
 
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: #d0ffec; }
-  ::-webkit-scrollbar-thumb { background: #a0d2be; border-radius: 3px; }
+  /* Hide scrollbar but keep scrolling */
+  ::-webkit-scrollbar { display: none; }
+  html { scrollbar-width: none; }
 
   /* Creature canvas overlay */
   #creature-canvas {
