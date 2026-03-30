@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buitenaarts 33</title>
+<script>
+// ╔══════════════════════════════════════════════════╗
+// ║           🎛️  TWEAK THESE VARIABLES  🎛️          ║
+// ╚══════════════════════════════════════════════════╝
+
+const CONFIG = {
+  // --- Event ---
+  partyDate: '2026-05-02T14:00:00+02:00',
+
+  // --- Sun ---
+  sunEmoji: '🌞',
+  sunSize: '8rem',
+  sunStartY: 0.26,           // fraction of viewport height (0 = top, 1 = bottom)
+  sunPeakScroll: 0.25,       // scroll % where sun reaches highest point
+  sunPeakY: -0.05,           // peak Y position (negative = above viewport)
+  sunEndY: 1.15,             // where sun exits (>1 = below viewport)
+  sunRotStart: 0,            // degrees at start
+  sunRotEnd: 30,             // degrees at end
+  sunScaleStart: 1,
+  sunScaleEnd: 0.7,
+  sunBobAmount: 12,          // px of float bob when idle
+  sunBobSpeed: 500,          // ms per bob cycle
+
+  // --- Moon ---
+  moonEmoji: '🌝',
+  moonSize: '8rem',
+  moonAppearScroll: 0.4,     // scroll % when moon appears
+  moonStartX: 0.05,          // fraction of viewport width
+  moonEndX: 0.82,
+  moonStartY: 1.1,           // below viewport
+  moonEndY: 0.03,            // near top
+  moonRotStart: -15,
+  moonRotEnd: 0,
+  moonScaleStart: 0.6,
+  moonScaleEnd: 1,
+  moonFadeInDuration: 0.15,  // fraction of moon's scroll range
+
+  // --- Flying creatures ---
+  butterflyEmojis: ['🦋', '🦋', '🌸'],
+  ufoEmoji: '🛸',
+  creatureCrossover: 0.5,    // scroll % where butterflies fade out and UFOs take over
+  ufoMaxActive: 10,
+  ufoSpawnChance: 0.01,      // per 16px scrolled (both directions)
+  ufoScrollStep: 16,         // px per spawn roll
+  ufoSizeMin: 1.5,           // rem
+  ufoSizeMax: 4,             // rem
+  ufoAltitudeMin: 0.05,      // fraction of vh
+  ufoAltitudeMax: 0.90,
+  ufoDurationMin: 3000,      // ms
+  ufoDurationMax: 8000,
+  ufoWaveAmpMin: 15,         // px
+  ufoWaveAmpMax: 55,
+  ufoWaveFreqMin: 2,         // full waves across screen
+  ufoWaveFreqMax: 5,
+  ufoFlipGoingRight: true,   // mirror when going right
+
+  // --- Theme transition ---
+  goldenHourPosition: 0.45,  // scroll % for golden hour midpoint
+  mapDarkFilterStart: 0.5,   // scroll % when map starts inverting
+};
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #d0ffec;
+    --text: #143228;
+    --text-muted: #3c6455;
+    --text-faint: #6e9b8c;
+    --card-bg: rgba(220, 255, 240, 0.7);
+    --card-border: rgba(0, 60, 40, 0.1);
+    --card-hover: #fb923c;
+    --divider-bg: rgba(0, 60, 40, 0.08);
+    --accent: #ff6e00;
+    --accent2: #f472b6;
+    --link: #fb923c;
+    --scrollbar-track: #e8dfd2;
+    --scrollbar-thumb: #ccc;
+    --detail-border: rgba(0, 0, 0, 0.06);
+    --hero-glow: rgba(100, 255, 200, 0.15);
+    --map-filter: none;
+    --countdown-bg: rgba(220, 255, 240, 0.6);
+    --countdown-border: rgba(0, 60, 40, 0.1);
+    --scrollbar-track: #d0ffec;
+    --scrollbar-thumb: #a0d2be;
+    --grad-a: #ff7800;
+    --grad-b: #ff4632;
+    --grad-c: #dc328c;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    overflow-x: hidden;
+    min-height: 100vh;
+    transition: background 0.05s linear, color 0.05s linear;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+
+  /* Flying creatures */
+  .ufo, .butterfly {
+    position: fixed;
+    z-index: 11;
+    pointer-events: none;
+    opacity: 0;
+    will-change: transform, opacity;
+    top: 0;
+    left: 0;
+    transition: none;
+  }
+
+  .ufo {
+    filter: drop-shadow(0 0 15px rgba(80, 255, 80, 0.7))
+            drop-shadow(0 0 40px rgba(60, 255, 60, 0.5))
+            drop-shadow(0 0 80px rgba(40, 220, 40, 0.3));
+  }
+
+  .butterfly {
+    filter: drop-shadow(0 0 10px rgba(255, 180, 100, 0.5))
+            drop-shadow(0 0 25px rgba(255, 140, 60, 0.3));
+  }
+
+  /* Celestial bodies */
+  .celestial {
+    position: fixed;
+    z-index: 10;
+    pointer-events: none;
+    transition: none;
+    will-change: transform, opacity, filter;
+    top: 0;
+    left: 0;
+    opacity: 0;
+  }
+
+  #sun {
+    filter: drop-shadow(0 0 40px rgba(255, 180, 50, 0.8))
+            drop-shadow(0 0 80px rgba(255, 140, 30, 0.5))
+            drop-shadow(0 0 160px rgba(255, 100, 0, 0.3));
+  }
+
+  #moon {
+    filter: drop-shadow(0 0 30px rgba(200, 210, 255, 0.7))
+            drop-shadow(0 0 70px rgba(150, 170, 255, 0.4))
+            drop-shadow(0 0 140px rgba(120, 140, 255, 0.2));
+  }
+
+  /* Hero */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    position: relative;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 700px;
+    height: 700px;
+    background: radial-gradient(circle, var(--hero-glow) 0%, transparent 70%);
+    pointer-events: none;
+    transition: background 0.05s linear;
+  }
+
+  .hero h1 {
+    font-size: 4.5rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--grad-a) 0%, var(--grad-b) 50%, var(--grad-c) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.3rem;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    margin-bottom: 0.75rem;
+    transition: color 0.05s linear;
+  }
+
+  .hero-sub {
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    font-weight: 300;
+    max-width: 500px;
+    line-height: 1.6;
+    transition: color 0.05s linear;
+  }
+
+  .scroll-hint {
+    position: absolute;
+    bottom: 2rem;
+    color: var(--text-faint);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    animation: pulse-opacity 2s ease-in-out infinite;
+    transition: color 0.05s linear;
+  }
+
+  @keyframes pulse-opacity {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.7; }
+  }
+
+  /* Sections */
+  section {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 4rem 2rem;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s ease, transform 0.8s ease, color 0.05s linear;
+  }
+
+  section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  section h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: color 0.05s linear;
+  }
+
+  section h2 .accent {
+    background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  p {
+    font-size: 1.05rem;
+    line-height: 1.8;
+    color: var(--text-muted);
+    transition: color 0.05s linear;
+  }
+
+  /* Info cards */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .info-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    transition: all 0.3s ease, background 0.05s linear, border-color 0.05s linear;
+    backdrop-filter: blur(8px);
+  }
+
+  .info-card:hover {
+    border-color: var(--card-hover);
+    box-shadow: 0 0 20px rgba(251,146,60,0.15);
+    transform: translateY(-2px);
+  }
+
+  .info-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .info-card h3 { font-size: 0.95rem; color: var(--text); margin-bottom: 0.3rem; font-weight: 600; transition: color 0.05s linear; }
+  .info-card p { font-size: 0.85rem; color: var(--text-faint); line-height: 1.5; transition: color 0.05s linear; }
+
+  .info-card.full { grid-column: 1 / -1; }
+
+  /* Details list */
+  .details {
+    list-style: none;
+    margin-top: 1rem;
+  }
+
+  .details li {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--detail-border);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    font-size: 1rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+    transition: color 0.05s linear, border-color 0.05s linear;
+  }
+
+  .details li:last-child { border-bottom: none; }
+
+  .details .bullet {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+    flex-shrink: 0;
+    margin-top: 0.5rem;
+  }
+
+  /* Map */
+  .map-wrap {
+    margin-top: 1.5rem;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--card-border);
+    transition: border-color 0.05s linear;
+  }
+
+  .map-wrap iframe {
+    border: 0;
+    display: block;
+    filter: var(--map-filter);
+    transition: filter 0.3s ease;
+  }
+
+  .map-link { margin-top: 0.75rem; font-size: 0.85rem; }
+  .map-link a { color: var(--link); text-decoration: none; transition: color 0.05s linear; }
+  .map-link a:hover { text-decoration: underline; }
+
+  /* Countdown */
+  .countdown {
+    text-align: center;
+    margin-top: 1.5rem;
+    padding: 2rem;
+    background: var(--countdown-bg);
+    border: 1px solid var(--countdown-border);
+    border-radius: 14px;
+    transition: background 0.05s linear, border-color 0.05s linear;
+  }
+
+  .countdown-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 3.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--grad-a), var(--grad-b), var(--grad-c));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .countdown-label {
+    font-size: 0.9rem;
+    color: var(--text-faint);
+    margin-top: 0.25rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: color 0.05s linear;
+  }
+
+  /* Divider */
+  .divider {
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--grad-a), var(--grad-b));
+    border-radius: 3px;
+    margin: 3rem auto;
+  }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text-faint);
+    font-size: 0.8rem;
+    transition: color 0.05s linear;
+  }
+
+  @media (max-width: 600px) {
+    .hero h1 { font-size: 2.8rem; }
+    .info-grid { grid-template-columns: 1fr; }
+    section { padding: 3rem 1.5rem; }
+    .countdown-number { font-size: 2.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="celestial" id="sun"></div>
+<div class="celestial" id="moon"></div>
+
+<div class="hero">
+  <h1>Buitenaarts 33</h1>
+  <div class="hero-date">Zaterdag 2 mei 2026</div>
+  <p class="hero-sub">Ik word 33. Jij bent uitgenodigd.<br>Neem good vibes en zonnebrand mee.</p>
+  <div class="scroll-hint">↓ de details ↓</div>
+</div>
+
+<section>
+  <h2>📍 <span class="accent">Wanneer & Waar</span></h2>
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="icon">📅</div>
+      <h3>Datum</h3>
+      <p>Zaterdag 2 mei 2026</p>
+    </div>
+    <div class="info-card">
+      <div class="icon">⏰</div>
+      <h3>Tijd</h3>
+      <p>Nader te bepalen — middag tot avond</p>
+    </div>
+    <div class="info-card full">
+      <div class="icon">📍</div>
+      <h3>Locatie</h3>
+      <p>Oranjestraat 8, 1623 JS Hoorn</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section>
+  <h2>🗺️ <span class="accent">Route</span></h2>
+  <ul class="details">
+    <li><span class="bullet"></span>Oranjestraat 8, 1623 JS Hoorn</li>
+    <li><span class="bullet"></span>Gratis parkeren in de omliggende straten</li>
+  </ul>
+  <div class="map-wrap">
+    <iframe
+      src="https://www.openstreetmap.org/export/embed.html?bbox=5.0555%2C52.6395%2C5.0635%2C52.6435&layer=mapnik&marker=52.6415%2C5.0595"
+      width="100%" height="300"
+      loading="lazy"
+      allowfullscreen>
+    </iframe>
+  </div>
+  <p class="map-link"><a href="https://www.google.com/maps/search/?api=1&query=Oranjestraat+8+1623+JS+Hoorn" target="_blank" rel="noopener">Open in Google Maps ↗</a></p>
+</section>
+
+<div class="divider"></div>
+
+<section>
+  <h2>👔 <span class="accent">Dresscode</span></h2>
+  <p>Wordt nog bekendgemaakt — stay tuned.</p>
+</section>
+
+<div class="divider"></div>
+
+<section>
+  <h2>🧠 <span class="accent">Themaideeën</span></h2>
+  <p style="margin-bottom: 1rem;">Nog niks besloten — dit zijn de kandidaten. Meningen welkom.</p>
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="icon">🌀</div>
+      <h3>Patterns on Patterns</h3>
+      <p>Draag zoveel mogelijk clashende prints. Strepen op bloemen op ruitjes. Meer is meer. Overdag knalt het in de zon, 's avonds blacklight erbij → kaleidoscoop.</p>
+    </div>
+    <div class="info-card">
+      <div class="icon">🐦‍🔥</div>
+      <h3>Crazy Birds</h3>
+      <p>Tropisch, bont, pluimen. Denk flamingo's, papegaaien, pauwen. Maskers, veren, neonkleuren. Hitchcock meets carnaval.</p>
+    </div>
+    <div class="info-card">
+      <div class="icon">🚪</div>
+      <h3>Be Your Own Bouncer</h3>
+      <p>Tuinhuis rave. Iedereen is z'n eigen uitsmijter. Zwart t-shirt, oortje, klembord — maar je laat jezelf altijd binnen.</p>
+    </div>
+    <div class="info-card">
+      <div class="icon">🦚</div>
+      <h3>Plumage</h3>
+      <p>Mashup: vogelpatronen als thema. Pauwogen, verenfractals, iridescent alles. De visuele kracht van birds + de patroon-obsessie.</p>
+    </div>
+    <div class="info-card">
+      <div class="icon">🦋</div>
+      <h3>Transformeer</h3>
+      <p>Kom als iets of iemand anders dan je normaal bent. Metamorfose als thema — alter ego, andere tijdperk, ander wezen. Hoe groter de transformatie, hoe beter.</p>
+    </div>
+    <div class="info-card">
+      <div class="icon">⭐</div>
+      <h3>VIP Experience</h3>
+      <p>Iedereen is VIP. Rode loper in de tuin, velvet koorden, backstage passes, champagne bij binnenkomst. Dress to impress — jij staat op de gastenlijst.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section>
+  <h2>🎵 <span class="accent">Wat kun je verwachten</span></h2>
+  <ul class="details">
+    <li><span class="bullet"></span>Muziek — de jarige draait zelf. Plus Flowerguy achter de decks 🌸</li>
+    <li><span class="bullet"></span>Drinken & eten — details volgen</li>
+    <li><span class="bullet"></span>Leuke mensen, lekker weer (we manifesten het), goede tijden</li>
+  </ul>
+</section>
+
+<div class="divider"></div>
+
+<section>
+  <h2>📝 <span class="accent">Goed om te weten</span></h2>
+  <ul class="details">
+    <li><span class="bullet"></span>Neem je eigen kleed / stoel mee als je wil zitten</li>
+    <li><span class="bullet"></span>Zonnebrand is niet optioneel — je verbrandt en ik oordeel</li>
+    <li><span class="bullet"></span>Geen cadeaus nodig — je aanwezigheid is het cadeau (maar drankjes zijn welkom)</li>
+    <li><span class="bullet"></span>Blijven slapen is mogelijk! Laat het me van tevoren weten zodat ik matrassen kan regelen</li>
+  </ul>
+</section>
+
+<div class="divider"></div>
+
+<section>
+  <div class="countdown" id="countdown">
+    <div class="countdown-number" id="countdown-number"></div>
+    <div class="countdown-label">dagen te gaan</div>
+  </div>
+</section>
+
+<footer>
+  <p>Buitenaarts 33 · 2 mei 2026 · Hoorn</p>
+</footer>
+
+<script>
+// ════════════════════════════════════════
+//  ENGINE — reads from CONFIG, don't edit
+//  unless you're changing behaviour
+// ════════════════════════════════════════
+
+const C = CONFIG;
+
+// --- Init emoji content & sizes from config ---
+document.getElementById('sun').textContent = C.sunEmoji;
+document.getElementById('sun').style.fontSize = C.sunSize;
+document.getElementById('moon').textContent = C.moonEmoji;
+document.getElementById('moon').style.fontSize = C.moonSize;
+
+// --- Helpers ---
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function lerpColor(a, b, t) {
+  const r = Math.round(lerp(a[0], b[0], t));
+  const g = Math.round(lerp(a[1], b[1], t));
+  const bl = Math.round(lerp(a[2], b[2], t));
+  const alpha = a.length > 3 ? lerp(a[3], b[3], t) : undefined;
+  return alpha !== undefined ? `rgba(${r},${g},${bl},${alpha.toFixed(3)})` : `rgb(${r},${g},${bl})`;
+}
+
+// --- Theme color stops ---
+const stops = [
+  { at: 0,
+    bg: [208, 255, 236], text: [20, 50, 40], textMuted: [60, 100, 85], textFaint: [110, 155, 140],
+    cardBg: [220, 255, 240, 0.7], cardBorder: [0, 60, 40, 0.1], detailBorder: [0, 60, 40, 0.08],
+    heroGlow: [100, 255, 200, 0.15], scrollTrack: [208, 255, 236], scrollThumb: [160, 210, 190],
+    countdownBg: [220, 255, 240, 0.6], countdownBorder: [0, 60, 40, 0.1],
+    gradA: [255, 120, 0], gradB: [255, 70, 50], gradC: [220, 50, 140],
+    accent: [255, 110, 0],
+  },
+  { at: C.goldenHourPosition,
+    bg: [23, 61, 53], text: [200, 240, 225], textMuted: [150, 200, 180], textFaint: [100, 150, 135],
+    cardBg: [30, 75, 65, 0.8], cardBorder: [60, 120, 100, 0.3], detailBorder: [60, 120, 100, 0.2],
+    heroGlow: [100, 255, 200, 0.12], scrollTrack: [23, 61, 53], scrollThumb: [60, 110, 95],
+    countdownBg: [30, 75, 65, 0.7], countdownBorder: [60, 120, 100, 0.3],
+    gradA: [255, 195, 80], gradB: [255, 120, 110], gradC: [200, 160, 255],
+    accent: [255, 180, 90],
+  },
+  { at: 1,
+    bg: [14, 10, 22], text: [224, 220, 230], textMuted: [187, 180, 195], textFaint: [105, 98, 115],
+    cardBg: [24, 18, 36, 0.8], cardBorder: [38, 28, 55, 1], detailBorder: [34, 24, 50, 1],
+    heroGlow: [160, 100, 255, 0.08], scrollTrack: [14, 10, 22], scrollThumb: [45, 35, 65],
+    countdownBg: [24, 18, 36, 0.8], countdownBorder: [38, 28, 55, 1],
+    gradA: [251, 146, 60], gradB: [244, 114, 182], gradC: [192, 132, 252],
+    accent: [251, 146, 60],
+  }
+];
+
+function sampleStops(t, key) {
+  let a = stops[0], b = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i].at && t <= stops[i + 1].at) { a = stops[i]; b = stops[i + 1]; break; }
+  }
+  const range = b.at - a.at;
+  return lerpColor(a[key], b[key], range > 0 ? (t - a.at) / range : 0);
+}
+
+function applyTheme(t) {
+  const root = document.documentElement;
+  const map = {
+    bg: '--bg', text: '--text', textMuted: '--text-muted', textFaint: '--text-faint',
+    cardBg: '--card-bg', cardBorder: '--card-border', detailBorder: '--detail-border',
+    heroGlow: '--hero-glow', scrollTrack: '--scrollbar-track', scrollThumb: '--scrollbar-thumb',
+    countdownBg: '--countdown-bg', countdownBorder: '--countdown-border',
+    gradA: '--grad-a', gradB: '--grad-b', gradC: '--grad-c',
+    accent: '--accent'
+  };
+  Object.keys(map).forEach(k => root.style.setProperty(map[k], sampleStops(t, k)));
+  root.style.setProperty('--map-filter',
+    t > C.mapDarkFilterStart
+      ? `invert(1) hue-rotate(180deg) brightness(${lerp(1, 0.9, (t - C.mapDarkFilterStart) * 2)}) contrast(${lerp(1, 1.1, (t - C.mapDarkFilterStart) * 2)})`
+      : 'none'
+  );
+}
+
+// --- Scroll handler ---
+function place(el, x, y, opacity, rot = 0, scale = 1) {
+  el.style.transform = `translate(${x}px, ${y}px) rotate(${rot}deg) scale(${scale})`;
+  el.style.opacity = Math.max(0, Math.min(1, opacity));
+}
+
+let ticking = false;
+function onScroll() {
+  if (ticking) return;
+  ticking = true;
+  requestAnimationFrame(() => {
+    const scrollMax = document.documentElement.scrollHeight - window.innerHeight;
+    const t = scrollMax > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollMax)) : 0;
+    const smooth = t * t * (3 - 2 * t); // smoothstep
+    applyTheme(smooth);
+
+    const sun = document.getElementById('sun');
+    const moon = document.getElementById('moon');
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // ☀️ SUN — parabolic arc
+    {
+      const st = smooth;
+      const sx = lerp(vw / 2 - 64, vw * 0.85, st);
+      const yStart = vh * C.sunStartY;
+      const yPeak = vh * C.sunPeakY;
+      const yEnd = vh * C.sunEndY;
+      const peak = C.sunPeakScroll;
+      const sy = st <= peak
+        ? lerp(yStart, yPeak, 1 - (1 - st / peak) * (1 - st / peak))
+        : lerp(yPeak, yEnd, ((st - peak) / (1 - peak)) * ((st - peak) / (1 - peak)));
+
+      const bobAmt = smooth < 0.05 ? 1 - smooth / 0.05 : 0;
+      const bob = bobAmt * Math.sin(Date.now() / C.sunBobSpeed) * C.sunBobAmount;
+      const rot = lerp(C.sunRotStart, C.sunRotEnd, st);
+      const scale = lerp(C.sunScaleStart, C.sunScaleEnd, st);
+
+      place(sun, sx, sy + bob, 1, rot, scale);
+      if (smooth < 0.05) requestAnimationFrame(onScroll);
+    }
+
+    // 🌝 MOON — ease-out rise
+    if (smooth >= C.moonAppearScroll) {
+      const mt = (smooth - C.moonAppearScroll) / (1 - C.moonAppearScroll);
+      const mx = lerp(vw * C.moonStartX, vw * C.moonEndX, mt);
+      const my = lerp(vh * C.moonStartY, vh * C.moonEndY, mt * (2 - mt));
+      const fade = mt < C.moonFadeInDuration ? mt / C.moonFadeInDuration : 1;
+      const rot = lerp(C.moonRotStart, C.moonRotEnd, mt);
+      const scale = lerp(C.moonScaleStart, C.moonScaleEnd, mt);
+      place(moon, mx, my, fade, rot, scale);
+    } else {
+      moon.style.opacity = 0;
+    }
+
+    ticking = false;
+  });
+}
+
+window.addEventListener('scroll', onScroll, { passive: true });
+applyTheme(0);
+onScroll();
+
+// --- Flying creature system (butterflies → UFOs) ---
+(function creatureSystem() {
+  let activeCount = 0;
+
+  function getScrollT() {
+    const scrollMax = document.documentElement.scrollHeight - window.innerHeight;
+    return scrollMax > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollMax)) : 0;
+  }
+
+  function spawnCreature() {
+    if (activeCount >= C.ufoMaxActive) return;
+    activeCount++;
+
+    const scrollT = getScrollT();
+    const cross = C.creatureCrossover;
+    // Below crossover: only butterflies. Above: only UFOs. In between: mix.
+    const isUfo = scrollT >= cross;
+
+    const el = document.createElement('div');
+    if (isUfo) {
+      el.className = 'ufo';
+      el.textContent = C.ufoEmoji;
+    } else {
+      el.className = 'butterfly';
+      el.textContent = C.butterflyEmojis[Math.floor(Math.random() * C.butterflyEmojis.length)];
+    }
+    document.body.appendChild(el);
+
+    const goRight = Math.random() > 0.5;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const size = C.ufoSizeMin + Math.random() * (C.ufoSizeMax - C.ufoSizeMin);
+    const altitude = vh * (C.ufoAltitudeMin + Math.random() * (C.ufoAltitudeMax - C.ufoAltitudeMin));
+    const duration = isUfo
+      ? C.ufoDurationMin + Math.random() * (C.ufoDurationMax - C.ufoDurationMin)
+      : 4000 + Math.random() * 6000; // butterflies: slower, more floaty
+    const waveAmp = isUfo
+      ? C.ufoWaveAmpMin + Math.random() * (C.ufoWaveAmpMax - C.ufoWaveAmpMin)
+      : 30 + Math.random() * 60; // butterflies: more erratic
+    const waveFreq = isUfo
+      ? C.ufoWaveFreqMin + Math.random() * (C.ufoWaveFreqMax - C.ufoWaveFreqMin)
+      : 4 + Math.random() * 6; // butterflies: fluttery
+
+    el.style.fontSize = (isUfo ? size : size * 0.8) + 'rem';
+
+    const startX = goRight ? -120 : vw + 120;
+    const endX = goRight ? vw + 120 : -120;
+    const startTime = Date.now();
+
+    let dead = false;
+
+    function animate() {
+      if (dead) return;
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(1, elapsed / duration);
+
+      // Kill creature if we've scrolled into the wrong zone
+      const nowT = getScrollT();
+      const inWrongZone = isUfo ? nowT < cross : nowT >= cross;
+      if (inWrongZone) {
+        dead = true;
+        // Swap to death emoji
+        el.textContent = isUfo ? '💥' : '✨';
+        el.className = ''; // strip glow filters
+        el.style.transition = 'transform 1s ease-out, opacity 1s ease-out';
+        el.style.opacity = 0;
+        // Get current position and scale up from there
+        const cx = lerp(startX, endX, t);
+        const cy = altitude + Math.sin(t * Math.PI * waveFreq) * waveAmp;
+        const deathScale = isUfo ? 3 : 2.5;
+        el.style.transform = `translate(${cx}px, ${cy}px) scale(${deathScale})`;
+        // Spawn burst particles
+        const particles = isUfo
+          ? ['💥', '🔥', '💫', '☄️']
+          : ['✨', '💫', '⭐'];
+        const count = isUfo ? 7 : 5;
+        for (let i = 0; i < count; i++) {
+          const spark = document.createElement('div');
+          spark.textContent = particles[Math.floor(Math.random() * particles.length)];
+          spark.style.cssText = `position:fixed;top:0;left:0;z-index:12;pointer-events:none;font-size:${1 + Math.random() * 1.5}rem;opacity:1;transition:transform 1s ease-out, opacity 1s ease-out;`;
+          spark.style.transform = `translate(${cx}px, ${cy}px)`;
+          document.body.appendChild(spark);
+          const angle = Math.random() * Math.PI * 2;
+          const dist = (isUfo ? 50 : 40) + Math.random() * 80;
+          requestAnimationFrame(() => {
+            spark.style.transform = `translate(${cx + Math.cos(angle) * dist}px, ${cy + Math.sin(angle) * dist}px) scale(0.3)`;
+            spark.style.opacity = 0;
+          });
+          setTimeout(() => spark.remove(), 1050);
+        }
+        setTimeout(() => { el.remove(); activeCount--; }, 1050);
+        return;
+      }
+
+      const x = lerp(startX, endX, t);
+      const wave = Math.sin(t * Math.PI * waveFreq) * waveAmp;
+      const flutter = isUfo ? 0 : Math.sin(elapsed / 120) * 8;
+      const y = altitude + wave + flutter;
+      const flip = (C.ufoFlipGoingRight && goRight) ? ' scaleX(-1)' : '';
+      const rot = isUfo ? '' : ` rotate(${Math.sin(elapsed / 200) * 15}deg)`;
+      el.style.transform = `translate(${x}px, ${y}px)${flip}${rot}`;
+      el.style.opacity = 1;
+
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        el.remove();
+        activeCount--;
+      }
+    }
+    requestAnimationFrame(animate);
+  }
+
+  let lastScrollY = window.scrollY;
+  let scrollAccum = 0;
+  window.addEventListener('scroll', () => {
+    const currentY = window.scrollY;
+    const delta = currentY - lastScrollY;
+    scrollAccum += Math.abs(delta);
+    while (scrollAccum >= C.ufoScrollStep) {
+      scrollAccum -= C.ufoScrollStep;
+      if (activeCount < C.ufoMaxActive && Math.random() < C.ufoSpawnChance) {
+        spawnCreature();
+      }
+    }
+    lastScrollY = currentY;
+  }, { passive: true });
+})();
+
+// --- Section fade-in ---
+const sections = document.querySelectorAll('section');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.15 });
+sections.forEach(s => observer.observe(s));
+
+// --- Countdown ---
+(function countdown() {
+  const party = new Date(C.partyDate);
+  const now = new Date();
+  const days = Math.ceil((party - now) / 86400000);
+  const el = document.getElementById('countdown-number');
+  if (days > 0) {
+    el.textContent = days;
+  } else if (days === 0) {
+    el.textContent = '🎉';
+    document.querySelector('.countdown-label').textContent = "HET IS VANDAAG";
+  } else {
+    el.textContent = '🎉';
+    document.querySelector('.countdown-label').textContent = "DAT WAS EEN FEEST";
+  }
+})();
+
+// --- Hide scroll hint ---
+window.addEventListener('scroll', () => {
+  const hint = document.querySelector('.scroll-hint');
+  if (hint && window.scrollY > 100) hint.style.opacity = '0';
+}, { passive: true });
+</script>
+</body>
+</html>
